@@ -7,9 +7,7 @@ The publisher is in the form of a Maven plug-in that in turn executes code from 
 
 ## General Operation
 
-The plug-in will scan a _modulesRoot_ directory for files named _Modulefile_. Any directory found that contains such a file with be considered to be a module and will participate in the validation. A check is made whether a module is already published or to avoid that the same version is published twice. In essence, running _validate_ and _publish_ on a code base where no module versions have changed will not cause any attempts to publish. All modules will still be validated though.
-
-A boolean parameter has been added to tell the plug-in to instead search for existing metadata.json files and use them rather than the Modulefile. This function is however not yet enabled.
+The plug-in will scan a _modulesRoot_ directory for files named _Modulefile_ or _metadata.json_. Any directory found that contains such a file with be considered to be a module and will participate in the validation. A check is made whether a module is already published or to avoid that the same version is published twice. In essence, running _validate_ and _publish_ on a code base where no module versions have changed will not cause any attempts to publish. All modules will still be validated though.
 
 ## The _validate_ goal
 
@@ -50,4 +48,4 @@ The puppet-lint validation can be enabled using the boolean parameter _enablePup
 
 ## The _publish_ goal
 
-This goal with perform the actual act of building and publishing the module to the Puppet Forge. It does this by first calling the Geppetto Module builder which is responsible for creating the metadata.json with check-sums etc. and then to create the tar-ball. The tar-ball is then uploaded to the forge using the credentials stated for the publisherLogin and publisherPassword parameters.
+This goal will perform the actual act of building and publishing the module(s) to the Puppet Forge. The Geppetto Module builder which is responsible for creating the metadata.json file with check-sums etc. will be called when no metadata.json file is found in a module. As a final step, a gzipped tar-ball is created for each module and then uploaded to the forge using the credentials stated for the publisherLogin and publisherPassword parameters.

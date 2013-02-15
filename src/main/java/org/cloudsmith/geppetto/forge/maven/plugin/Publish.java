@@ -13,6 +13,7 @@ package org.cloudsmith.geppetto.forge.maven.plugin;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -53,20 +54,28 @@ public class Publish extends AbstractForgeMojo {
 
 	private File buildForge(ForgeService forgeService, File moduleSource, File destination, String[] namesReceiver)
 			throws IOException, IncompleteException {
-		org.cloudsmith.geppetto.forge.Metadata md = forgeService.loadModule(moduleSource);
-		namesReceiver[0] = md.getUser();
-		namesReceiver[1] = md.getName();
-		String fullName = md.getFullName();
-		if(fullName == null)
-			throw new IncompleteException("A full name (user-module) must be specified in the Modulefile");
 
-		String ver = md.getVersion();
-		if(ver == null)
-			throw new IncompleteException("version must be specified in the Modulefile");
+		File metadataJSON = new File(moduleSource, "metadata.json");
+		org.cloudsmith.geppetto.forge.Metadata md;
+		try {
+			md = forgeService.loadJSONMetadata(metadataJSON);
+		}
+		catch(FileNotFoundException e) {
+			md = forgeService.loadModule(moduleSource);
+			namesReceiver[0] = md.getUser();
+			namesReceiver[1] = md.getName();
+			String fullName = md.getFullName();
+			if(fullName == null)
+				throw new IncompleteException("A full name (user-module) must be specified in the Modulefile");
 
-		String fullNameWithVersion = fullName + '-' + ver;
-		md.saveJSONMetadata(new File(moduleSource, "metadata.json"));
+			String ver = md.getVersion();
+			if(ver == null)
+				throw new IncompleteException("version must be specified in the Modulefile");
 
+			md.saveJSONMetadata(metadataJSON);
+		}
+
+		String fullNameWithVersion = md.getFullName() + '-' + md.getVersion();
 		File moduleArchive = new File(destination, fullNameWithVersion + ".tar.gz");
 		OutputStream out = new GZIPOutputStream(new FileOutputStream(moduleArchive));
 		// Pack closes its output

@@ -128,9 +128,11 @@ public abstract class AbstractForgeMojo extends AbstractMojo {
 	private boolean findModuleFiles(File[] files, List<File> moduleFiles) {
 		if(files != null) {
 			int idx = files.length;
-			while(--idx >= 0)
-				if("Modulefile".equals(files[idx].getName()))
+			while(--idx >= 0) {
+				String name = files[idx].getName();
+				if("Modulefile".equals(name) || "metadata.json".equals(name))
 					return true;
+			}
 
 			idx = files.length;
 			while(--idx >= 0) {
