@@ -27,6 +27,7 @@
 								<puppetLintOption>NoHardTabsCheck</puppetLintOption>
 								<puppetLintOption>NoTwoSpaceSoftTabsCheck</puppetLintOption>
 							</puppetLintOptions>
+							<missingDefaultInSelector>ERROR</missingDefaultInSelector>
 						</configuration>
 					</execution>
 					<execution>

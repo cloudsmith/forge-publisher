@@ -11,6 +11,9 @@
  */
 package org.cloudsmith.geppetto.forge.maven.plugin;
 
+import static org.cloudsmith.geppetto.pp.dsl.validation.ValidationPreference.IGNORE;
+import static org.cloudsmith.geppetto.pp.dsl.validation.ValidationPreference.WARNING;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -31,9 +34,10 @@ import org.cloudsmith.geppetto.forge.v2.model.Metadata;
 import org.cloudsmith.geppetto.forge.v2.model.Module;
 import org.cloudsmith.geppetto.forge.v2.model.Release;
 import org.cloudsmith.geppetto.forge.v2.service.ReleaseService;
-import org.cloudsmith.geppetto.pp.dsl.PPStandaloneSetup;
 import org.cloudsmith.geppetto.pp.dsl.target.PptpResourceUtil;
-import org.cloudsmith.geppetto.pp.dsl.validation.DefaultPotentialProblemsAdvisor;
+import org.cloudsmith.geppetto.pp.dsl.validation.IPotentialProblemsAdvisor;
+import org.cloudsmith.geppetto.pp.dsl.validation.IValidationAdvisor.ComplianceLevel;
+import org.cloudsmith.geppetto.pp.dsl.validation.ValidationPreference;
 import org.cloudsmith.geppetto.puppetlint.PuppetLintRunner;
 import org.cloudsmith.geppetto.puppetlint.PuppetLintRunner.Issue;
 import org.cloudsmith.geppetto.puppetlint.PuppetLintService;
@@ -45,6 +49,7 @@ import org.cloudsmith.geppetto.validation.FileType;
 import org.cloudsmith.geppetto.validation.ValidationOptions;
 import org.cloudsmith.geppetto.validation.ValidationServiceFactory;
 import org.cloudsmith.geppetto.validation.runner.IEncodingProvider;
+import org.cloudsmith.geppetto.validation.runner.PPDiagnosticsSetup;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.URI;
@@ -106,32 +111,201 @@ public class Validate extends AbstractForgeMojo {
 	/**
 	 * Set to <tt>true</tt> to enable validation using puppet-lint
 	 */
-	@Parameter(property = "forge.enable.lint")
-	private boolean enablePuppetLintValidation;
+	@Parameter(property = "forge.validation.enablePuppetLint", defaultValue = "false")
+	private boolean enablePuppetLintValidation = false;
 
 	/**
-	 * Set to <tt>false</tt> to disable validation using the Geppetto Validator. It
-	 * is <tt>true</tt> by default.
+	 * An advisor to validation. Different implementations of this class capture the validation rules specific
+	 * to a puppet language version.
 	 */
-	@Parameter(property = "forge.enable.geppetto")
-	private boolean enableGeppettoValidation = true;
+	@Parameter(property = "forge.validation.complianceLevel", defaultValue = "PUPPET_2_7")
+	private ComplianceLevel complianceLevel = ComplianceLevel.PUPPET_2_7;
 
 	/**
-	 * <p>
-	 * <i>Geppetto Specific</i>
-	 * </p>
-	 * <p>
+	 * What environment to use during validation.
+	 */
+	@Parameter(property = "forge.validation.environment", defaultValue = "production")
+	private String environment = "production";
+
+	/**
+	 * Check the module layout.
+	 */
+	@Parameter(property = "forge.validation.checkLayout", defaultValue = "true")
+	private boolean checkLayout = true;
+
+	/**
+	 * Checking module semantics means that the module's dependencies are satisfied.
+	 */
+	@Parameter(property = "forge.validation.checkModuleSemantics", defaultValue = "true")
+	private boolean checkModuleSemantics = true;
+
+	/**
 	 * If this is set to <tt>true</tt> then the validator will make an attempt to resolve and install all dependencies for the modules that are
 	 * validated. Dependencies are resolved transitively and unresolved dependencies are considered to be validation errors.
-	 * </p>
-	 * 
-	 * @see #enableGeppettoValidation
 	 */
-	@Parameter(property = "forge.check.references")
-	private boolean checkReferences;
+	@Parameter(property = "forge.validation.checkReferences", defaultValue = "true")
+	private boolean checkReferences = true;
+
+	/**
+	 * How should assignment to variable $string be treated. Puppet bug http://projects.puppetlabs.com/issues/14093.
+	 */
+	@Parameter(property = "forge.validation.assignmentToVarNamedString", defaultValue = "WARNING")
+	private ValidationPreference assignmentToVarNamedString = WARNING;
+
+	/**
+	 * Puppet interprets the strings "false" and "true" as boolean true when they are used in a boolean context.
+	 * This validation preference flags them as "not a boolean value"
+	 */
+	@Parameter(property = "forge.validation.booleansInStringForm", defaultValue = "IGNORE")
+	private ValidationPreference booleansInStringForm = IGNORE;
+
+	/**
+	 * How an (optional) default that is not placed last should be validated for a case expression.
+	 */
+	@Parameter(property = "forge.validation.caseDefaultShouldAppearLast", defaultValue = "IGNORE")
+	private ValidationPreference caseDefaultShouldAppearLast = IGNORE;
+
+	/**
+	 * How should circular module dependencies be reported (ignore, warning, error).
+	 */
+	@Parameter(property = "forge.validation.circularDependencyPreference", defaultValue = "WARNING")
+	private ValidationPreference circularDependencyPreference = WARNING;
+
+	/**
+	 * How to validate a dq string - style guide says single quoted should be used if possible.
+	 */
+	@Parameter(property = "forge.validation.dqStringNotRequired", defaultValue = "IGNORE")
+	private ValidationPreference dqStringNotRequired = IGNORE;
+
+	/**
+	 * How to validate a dq string when it only contains a single interpolated variable.
+	 */
+	@Parameter(property = "forge.validation.dqStringNotRequiredVariable", defaultValue = "IGNORE")
+	private ValidationPreference dqStringNotRequiredVariable = IGNORE;
+
+	/**
+	 * How the 'ensure' property should be validated if not placed first among a resource's properties.
+	 */
+	@Parameter(property = "forge.validation.ensureShouldAppearFirstInResource", defaultValue = "IGNORE")
+	private ValidationPreference ensureShouldAppearFirstInResource = IGNORE;
+
+	/**
+	 * How to validate hyphens in non brace enclosed interpolations. In < 2.7 interpolation stops at a hyphen, but
+	 * not in 2.7. Thus when using 2.6 code in 2.7 or vice versa, the result is different.
+	 */
+	@Parameter(property = "forge.validation.interpolatedNonBraceEnclosedHyphens", defaultValue = "WARNING")
+	private ValidationPreference interpolatedNonBraceEnclosedHyphens = WARNING;
+
+	/**
+	 * How to validate a missing 'default' in switch type expressions i.e. 'case' and 'selector'
+	 */
+	@Parameter(property = "forge.validation.missingDefaultInSelector", defaultValue = "WARNING")
+	private ValidationPreference missingDefaultInSelector = WARNING;
+
+	/**
+	 * How to 'validate' the presence of ML comments.
+	 */
+	@Parameter(property = "forge.validation.mlComments", defaultValue = "IGNORE")
+	private ValidationPreference mlComments = IGNORE;
+
+	/**
+	 * How to validate right to left relationships ( e.g. a <- b and a <~ b)
+	 */
+	@Parameter(property = "forge.validation.rightToLeftRelationships", defaultValue = "IGNORE")
+	private ValidationPreference rightToLeftRelationships = IGNORE;
+
+	/**
+	 * How an (almost required) default that is not placed last should be validated for a selector expression.
+	 */
+	@Parameter(property = "forge.validation.selectorDefaultShouldAppearLast", defaultValue = "IGNORE")
+	private ValidationPreference selectorDefaultShouldAppearLast = IGNORE;
+
+	/**
+	 * How to validate unbraced interpolation.
+	 */
+	@Parameter(property = "forge.validation.unbracedInterpolation", defaultValue = "IGNORE")
+	private ValidationPreference unbracedInterpolation = IGNORE;
+
+	/**
+	 * How to validate a literal resource title. Style guide says they should be single quoted.
+	 */
+	@Parameter(property = "forge.validation.unquotedResourceTitles", defaultValue = "IGNORE")
+	private ValidationPreference unquotedResourceTitles = IGNORE;
 
 	@Parameter(property = "forge.lint.options")
 	private PuppetLintRunner.Option[] puppetLintOptions;
+
+	private final IPotentialProblemsAdvisor potentialProblemsAdvisor = new IPotentialProblemsAdvisor() {
+		@Override
+		public ValidationPreference assignmentToVarNamedString() {
+			return assignmentToVarNamedString;
+		}
+
+		@Override
+		public ValidationPreference booleansInStringForm() {
+			return booleansInStringForm;
+		}
+
+		@Override
+		public ValidationPreference caseDefaultShouldAppearLast() {
+			return caseDefaultShouldAppearLast;
+		}
+
+		@Override
+		public ValidationPreference circularDependencyPreference() {
+			return circularDependencyPreference;
+		}
+
+		@Override
+		public ValidationPreference dqStringNotRequired() {
+			return dqStringNotRequired;
+		}
+
+		@Override
+		public ValidationPreference dqStringNotRequiredVariable() {
+			return dqStringNotRequiredVariable;
+		}
+
+		@Override
+		public ValidationPreference ensureShouldAppearFirstInResource() {
+			return ensureShouldAppearFirstInResource;
+		}
+
+		@Override
+		public ValidationPreference interpolatedNonBraceEnclosedHyphens() {
+			return interpolatedNonBraceEnclosedHyphens;
+		}
+
+		@Override
+		public ValidationPreference missingDefaultInSelector() {
+			return missingDefaultInSelector;
+		}
+
+		@Override
+		public ValidationPreference mlComments() {
+			return mlComments;
+		}
+
+		@Override
+		public ValidationPreference rightToLeftRelationships() {
+			return rightToLeftRelationships;
+		}
+
+		@Override
+		public ValidationPreference selectorDefaultShouldAppearLast() {
+			return selectorDefaultShouldAppearLast;
+		}
+
+		@Override
+		public ValidationPreference unbracedInterpolation() {
+			return unbracedInterpolation;
+		}
+
+		@Override
+		public ValidationPreference unquotedResourceTitles() {
+			return unquotedResourceTitles;
+		}
+	};
 
 	private Diagnostic convertPuppetLintDiagnostic(File moduleRoot, Issue issue) {
 		Diagnostic diagnostic = new Diagnostic();
@@ -178,8 +352,6 @@ public class Validate extends AbstractForgeMojo {
 
 	private void geppettoValidation(List<File> moduleLocations, Diagnostic result) throws IOException {
 
-		RubyHelper.setRubyServicesFactory(JRubyServices.FACTORY);
-		PPStandaloneSetup.doSetup();
 		MetadataRepository metadataRepo = getForge().createMetadataRepository();
 
 		List<File> importedModuleLocations = null;
@@ -218,7 +390,10 @@ public class Validate extends AbstractForgeMojo {
 			importedModuleLocations = Collections.emptyList();
 		BasicDiagnostic diagnostics = new BasicDiagnostic();
 
+		RubyHelper.setRubyServicesFactory(JRubyServices.FACTORY);
 		ValidationOptions options = getValidationOptions(moduleLocations, importedModuleLocations);
+		new PPDiagnosticsSetup(complianceLevel, options.getProblemsAdvisor()).createInjectorAndDoEMFRegistration();
+
 		ValidationServiceFactory.createValidationService().validate(
 			diagnostics, getModulesRoot(), options,
 			importedModuleLocations.toArray(new File[importedModuleLocations.size()]), new NullProgressMonitor());
@@ -235,22 +410,7 @@ public class Validate extends AbstractForgeMojo {
 		return "Validation";
 	}
 
-	private ValidationOptions getValidationOptions(List<File> moduleLocations, List<File> importedModuleLocations) {
-		ValidationOptions options = new ValidationOptions();
-		options.setCheckLayout(true);
-		options.setCheckModuleSemantics(true);
-		options.setCheckReferences(checkReferences);
-		options.setFileType(FileType.PUPPET_ROOT);
-
-		// TODO: Selectable in the UI
-		options.setPlatformURI(PptpResourceUtil.getPuppet_2_7_19());
-
-		options.setEncodingProvider(new IEncodingProvider() {
-			public String getEncoding(URI file) {
-				return UTF_8.name();
-			}
-		});
-
+	private String getSearchPath(List<File> moduleLocations, List<File> importedModuleLocations) {
 		StringBuilder searchPath = new StringBuilder();
 
 		searchPath.append("lib/*:environments/$environment/*");
@@ -260,9 +420,39 @@ public class Validate extends AbstractForgeMojo {
 
 		for(File importedModuleLocation : importedModuleLocations)
 			searchPath.append(":" + getRelativePath(importedModuleLocation) + "/*");
+		return searchPath.toString();
+	}
 
-		options.setSearchPath(searchPath.toString());
-		options.setProblemsAdvisor(new DefaultPotentialProblemsAdvisor());
+	private ValidationOptions getValidationOptions(List<File> moduleLocations, List<File> importedModuleLocations) {
+		ValidationOptions options = new ValidationOptions();
+		options.setCheckLayout(checkLayout);
+		options.setCheckModuleSemantics(checkModuleSemantics);
+		options.setCheckReferences(checkReferences);
+
+		if(moduleLocations.size() == 1 && getModulesRoot().equals(moduleLocations.get(0)))
+			options.setFileType(FileType.MODULE_ROOT);
+		else
+			options.setFileType(FileType.PUPPET_ROOT);
+
+		switch(complianceLevel) {
+			case PUPPET_2_6:
+				options.setPlatformURI(PptpResourceUtil.getPuppet_2_6_9());
+				break;
+			case PUPPET_2_7:
+				options.setPlatformURI(PptpResourceUtil.getPuppet_2_7_19());
+				break;
+			case PUPPET_3_0:
+				options.setPlatformURI(PptpResourceUtil.getPuppet_3_0_0());
+		}
+
+		options.setEncodingProvider(new IEncodingProvider() {
+			public String getEncoding(URI file) {
+				return UTF_8.name();
+			}
+		});
+
+		options.setSearchPath(getSearchPath(moduleLocations, importedModuleLocations));
+		options.setProblemsAdvisor(potentialProblemsAdvisor);
 		return options;
 	}
 
@@ -274,7 +464,7 @@ public class Validate extends AbstractForgeMojo {
 			return;
 		}
 
-		if(enableGeppettoValidation)
+		if(checkLayout || checkModuleSemantics || checkReferences)
 			geppettoValidation(moduleRoots, result);
 
 		if(enablePuppetLintValidation)
