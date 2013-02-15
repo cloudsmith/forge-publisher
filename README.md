@@ -16,9 +16,9 @@ A boolean parameter has been added to tell the plug-in to instead search for exi
 Performs validation_ of the Module. Two types of validations are available
 
 ### Geppetto Validation
-Geppetto can find a lot of potential problems in your code sutch as:
+Geppetto can find a lot of potential problems in your code such as:
 
-* Circular Module Depenency
+* Circular Module Dependency
 * Interpolated hyphen without surrounding {}
 * Strings containing "false" or "true"
 * Missing 'default' in selector
