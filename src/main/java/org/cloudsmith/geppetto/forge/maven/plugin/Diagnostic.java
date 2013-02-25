@@ -46,8 +46,14 @@ public class Diagnostic extends MessageWithSeverity {
 	}
 
 	/**
-	 * @param error
-	 * @param string
+	 * Creates a new Diagnostic instance
+	 * 
+	 * @param severity
+	 *            Severity (see constants in {@link MessageWithSeverity})
+	 * @param type
+	 *            The type of message
+	 * @param message
+	 *            The textual content of the message
 	 */
 	public Diagnostic(int severity, DiagnosticType type, String message) {
 		setSeverity(severity);

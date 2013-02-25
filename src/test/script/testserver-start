@@ -1,6 +1,7 @@
 #/bin/sh
 PIDFILE=$1
 LOGFILE=$2
+echo `pwd`
 rake db:drop > /dev/null || {
 	echo "Failed to drop database" 1>&2
 	exit 1
