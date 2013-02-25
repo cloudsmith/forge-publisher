@@ -37,7 +37,7 @@
 							<goal>publish</goal>
 						</goals>
 						<configuration>
-							<dryRun>true</dryRun>
+							<dryRun>false</dryRun>
 						</configuration>
 					</execution>
 				</executions>

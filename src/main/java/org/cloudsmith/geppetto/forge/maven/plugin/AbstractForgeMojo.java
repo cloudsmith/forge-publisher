@@ -43,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 
 /**
  * Goal which performs basic validation.
@@ -152,12 +153,14 @@ public abstract class AbstractForgeMojo extends AbstractMojo {
 	public void execute() throws MojoExecutionException, MojoFailureException {
 		Diagnostic diagnostic = new Diagnostic();
 		try {
-			log = LoggerFactory.getLogger(getClass());
 			if(modulesRoot == null)
 				throw new MojoExecutionException("Missing required configuration parameter: 'modulesRoot'");
 			if(serviceURL == null)
 				throw new MojoExecutionException("Missing required configuration parameter: 'serviceURL'");
 			invoke(diagnostic);
+		}
+		catch(JsonParseException e) {
+			throw new MojoFailureException(getActionName() + " failed: Invalid Json: " + e.getMessage(), e);
 		}
 		catch(RuntimeException e) {
 			throw new MojoExecutionException("Internal exception while performing " + getActionName() + ": " +
@@ -241,6 +244,8 @@ public abstract class AbstractForgeMojo extends AbstractMojo {
 	}
 
 	protected Logger getLogger() {
+		if(log == null)
+			log = LoggerFactory.getLogger(getClass());
 		return log;
 	}
 
@@ -338,5 +343,9 @@ public abstract class AbstractForgeMojo extends AbstractMojo {
 
 		for(Diagnostic child : diag.getChildren())
 			logDiagnostic(indent, child);
+	}
+
+	public void setLogger(Logger log) {
+		this.log = log;
 	}
 }

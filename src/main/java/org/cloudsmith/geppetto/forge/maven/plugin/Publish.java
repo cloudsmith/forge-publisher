@@ -62,8 +62,6 @@ public class Publish extends AbstractForgeMojo {
 		}
 		catch(FileNotFoundException e) {
 			md = forgeService.loadModule(moduleSource);
-			namesReceiver[0] = md.getUser();
-			namesReceiver[1] = md.getName();
 			String fullName = md.getFullName();
 			if(fullName == null)
 				throw new IncompleteException("A full name (user-module) must be specified in the Modulefile");
@@ -75,6 +73,8 @@ public class Publish extends AbstractForgeMojo {
 			md.saveJSONMetadata(metadataJSON);
 		}
 
+		namesReceiver[0] = md.getUser();
+		namesReceiver[1] = md.getName();
 		String fullNameWithVersion = md.getFullName() + '-' + md.getVersion();
 		File moduleArchive = new File(destination, fullNameWithVersion + ".tar.gz");
 		OutputStream out = new GZIPOutputStream(new FileOutputStream(moduleArchive));

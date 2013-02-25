@@ -39,6 +39,21 @@ public class ValidateTestMojo extends AbstractForgeTestMojo {
 	}
 
 	@Test
+	public void moduleWithInvalidMetadata() throws Exception {
+		setTestForgeModulesRoot("test_metadata_invalid");
+		Validate validate = (Validate) lookupConfiguredMojo(createMavenSession(), newMojoExecution("validate"));
+		assertNotNull(validate);
+
+		try {
+			validate.execute();
+			fail("Invalid metadata was not detected");
+		}
+		catch(MojoFailureException e) {
+			assertTrue("Invalid metadata was not detected", e.getMessage().contains("Invalid Json"));
+		}
+	}
+
+	@Test
 	public void moduleWithNoMetadataNorModulefile() throws Exception {
 		setTestForgeModulesRoot("test_no_metadata_nor_modulefile");
 		Validate validate = (Validate) lookupConfiguredMojo(createMavenSession(), newMojoExecution("validate"));

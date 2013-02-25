@@ -19,6 +19,8 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
 	SetupTestMojo.class,
 	ValidateTestMojo.class,
+	PublishTestMojo.class,
+	RepublishTestMojo.class
 })
 // @fmtOn
 @RunWith(Suite.class)

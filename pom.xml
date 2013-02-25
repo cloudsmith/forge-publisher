@@ -29,6 +29,8 @@
 		<testForgeServerDir>${user.home}/git/puppet-forge-api</testForgeServerDir>
 		<testForgeLogin>bob</testForgeLogin>
 		<testForgePassword>bobbobbob</testForgePassword>
+		<testForgeLoginSecond>ben</testForgeLoginSecond>
+		<testForgePasswordSecond>newbnewb</testForgePasswordSecond>
 		<testForgeServiceURL>http://localhost:4567/</testForgeServiceURL>
 	</properties>
 
@@ -212,6 +214,14 @@
 						<property>
 							<name>forge.password</name>
 							<value>${testForgePassword}</value>
+						</property>
+						<property>
+							<name>forge.login.second</name>
+							<value>${testForgeLoginSecond}</value>
+						</property>
+						<property>
+							<name>forge.password.second</name>
+							<value>${testForgePasswordSecond}</value>
 						</property>
 						<property>
 							<name>forge.base.url</name>
