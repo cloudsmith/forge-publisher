@@ -1,6 +1,18 @@
+/**
+ * Copyright (c) 2013 Cloudsmith Inc. and other contributors, as listed below.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ * 
+ * Contributors:
+ *   Cloudsmith
+ * 
+ */
 package org.cloudsmith.geppetto.forge.maven.plugin;
 
 import java.io.File;
+import java.util.Properties;
 
 import org.apache.maven.execution.DefaultMavenExecutionRequest;
 import org.apache.maven.execution.MavenExecutionRequest;
@@ -14,7 +26,7 @@ import org.apache.maven.plugin.descriptor.MojoDescriptor;
 import org.apache.maven.plugin.testing.AbstractMojoTestCase;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuilder;
-import org.codehaus.plexus.PlexusTestCase;
+import org.apache.maven.project.ProjectBuildingRequest;
 import org.codehaus.plexus.component.configurator.ComponentConfigurationException;
 import org.codehaus.plexus.component.configurator.ComponentConfigurator;
 import org.codehaus.plexus.component.configurator.expression.ExpressionEvaluator;
@@ -24,15 +36,26 @@ import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-@RunWith(JUnit4.class)
-public class ValidateTest extends AbstractMojoTestCase {
-	private static Logger log = LoggerFactory.getLogger(ValidateTest.class);
+public class AbstractForgeTestMojo extends AbstractMojoTestCase {
+	File pom;
+
+	ProjectBuildingRequest buildingRequest;
+
+	Properties userProps;
+
+	protected MavenSession createMavenSession() {
+		buildingRequest.setUserProperties(userProps);
+		try {
+			MavenProject project = lookup(ProjectBuilder.class).build(pom, buildingRequest).getProject();
+			return newMavenSession(project);
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+			return null; // keep
+		}
+	}
 
 	@Override
 	protected Mojo lookupConfiguredMojo(MavenSession session, MojoExecution execution) throws Exception,
@@ -71,37 +94,30 @@ public class ValidateTest extends AbstractMojoTestCase {
 		return mojo;
 	}
 
+	protected void setTestForgeModulesRoot(String project) {
+		File projectFile = getTestFile("src/test/resources/workspace/" + project);
+		String absPath = projectFile.getAbsolutePath();
+		assertTrue("Project file " + absPath + " is not a directory", projectFile.isDirectory());
+		userProps.put("testForgeModulesRoot", absPath);
+	}
+
 	@Override
 	@Before
 	public void setUp() throws Exception {
 		super.setUp();
+		pom = getTestFile("src/test/resources/unit/publisher/pom.xml");
+		Assert.assertNotNull(pom);
+		Assert.assertTrue(pom.exists());
+		MavenExecutionRequest request = new DefaultMavenExecutionRequest();
+
+		buildingRequest = request.getProjectBuildingRequest();
+		userProps = new Properties();
+		userProps.put("testForgeServiceURL", System.getProperty("forge.base.url"));
 	}
 
 	@Override
 	@After
 	public void tearDown() throws Exception {
 		super.tearDown();
-	}
-
-	@Test
-	public void validate() throws Exception {
-		log.info("my.property = " + System.getProperty("my.property"));
-		log.info("basedir = " + PlexusTestCase.getBasedir());
-
-		File pom = getTestFile("src/test/resources/unit/publisher/pom.xml");
-		Assert.assertNotNull(pom);
-		Assert.assertTrue(pom.exists());
-
-		MavenExecutionRequest request = new DefaultMavenExecutionRequest();
-		MavenProject project = lookup(ProjectBuilder.class).build(pom, request.getProjectBuildingRequest()).getProject();
-
-		MavenSession session = newMavenSession(project);
-		Validate validate = (Validate) lookupConfiguredMojo(session, newMojoExecution("validate"));
-		Assert.assertNotNull(validate);
-		validate.execute();
-
-		Publish publish = (Publish) lookupConfiguredMojo(session, newMojoExecution("publish"));
-		Assert.assertNotNull(publish);
-		publish.execute();
 	}
 }

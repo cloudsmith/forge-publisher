@@ -12,11 +12,14 @@
 package org.cloudsmith.geppetto.forge.maven.plugin;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.regex.Pattern;
 
 import org.apache.maven.plugin.AbstractMojo;
@@ -25,12 +28,15 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.cloudsmith.geppetto.common.os.StreamUtil;
 import org.cloudsmith.geppetto.forge.ForgeFactory;
+import org.cloudsmith.geppetto.forge.ForgeService;
 import org.cloudsmith.geppetto.forge.impl.MetadataImpl;
 import org.cloudsmith.geppetto.forge.util.JsonUtils;
 import org.cloudsmith.geppetto.forge.v2.Forge;
 import org.cloudsmith.geppetto.forge.v2.client.ForgePreferences;
 import org.cloudsmith.geppetto.forge.v2.client.ForgePreferencesBean;
 import org.cloudsmith.geppetto.forge.v2.model.Metadata;
+import org.cloudsmith.geppetto.forge.v2.model.QName;
+import org.cloudsmith.geppetto.validation.DiagnosticType;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
 import org.slf4j.Logger;
@@ -58,6 +64,31 @@ public abstract class AbstractForgeMojo extends AbstractMojo {
 		DEFAULT_EXCLUDES_PATTERN = MetadataImpl.compileExcludePattern(excludes);
 	}
 
+	private static boolean isNull(String field) {
+		if(field == null)
+			return true;
+
+		field = field.trim();
+		if(field.length() == 0)
+			return true;
+
+		return "null".equals(field);
+	}
+
+	public static Properties readForgeProperties() throws IOException {
+		Properties props = new Properties();
+		InputStream inStream = AbstractForgeMojo.class.getResourceAsStream("/forge.properties");
+		if(inStream == null)
+			throw new FileNotFoundException("Resource forge.properties");
+		try {
+			props.load(inStream);
+			return props;
+		}
+		finally {
+			inStream.close();
+		}
+	}
+
 	@Parameter(property = "forge.modules.root", required = true)
 	private File modulesRoot;
 
@@ -65,15 +96,13 @@ public abstract class AbstractForgeMojo extends AbstractMojo {
 	 * The ClientID to use when performing retrieval of OAuth token. This
 	 * parameter is only used when the OAuth token is not provided.
 	 */
-	@Parameter(property = "forge.oauth.clientID")
-	private String clientID = "6ae715305e4c5fede6ee";
+	private String clientID;
 
 	/**
 	 * The ClientSecret to use when performing retrieval of OAuth token. This
 	 * parameter is only used when the OAuth token is not provided.
 	 */
-	@Parameter(property = "forge.oauth.clientSecret")
-	private String clientSecret = "89a983f88b7961df087cea1a8a8ee8255a7482bf";
+	private String clientSecret;
 
 	/**
 	 * The login name. Not required when the OAuth token is provided.
@@ -108,21 +137,38 @@ public abstract class AbstractForgeMojo extends AbstractMojo {
 
 	private transient Logger log;
 
+	public AbstractForgeMojo() {
+		try {
+			Properties props = readForgeProperties();
+			clientID = props.getProperty("forge.oauth.clientID");
+			clientSecret = props.getProperty("forge.oauth.clientSecret");
+		}
+		catch(IOException e) {
+			// Not able to read properties
+			throw new RuntimeException(e);
+		}
+	}
+
 	public void execute() throws MojoExecutionException, MojoFailureException {
 		Diagnostic diagnostic = new Diagnostic();
 		try {
 			log = LoggerFactory.getLogger(getClass());
+			if(modulesRoot == null)
+				throw new MojoExecutionException("Missing required configuration parameter: 'modulesRoot'");
+			if(serviceURL == null)
+				throw new MojoExecutionException("Missing required configuration parameter: 'serviceURL'");
 			invoke(diagnostic);
 		}
 		catch(RuntimeException e) {
-			throw new MojoExecutionException("Internal exception while performing " + getActionName(), e);
+			throw new MojoExecutionException("Internal exception while performing " + getActionName() + ": " +
+					e.getMessage(), e);
 		}
 		catch(Exception e) {
-			throw new MojoFailureException(getActionName() + " failed", e);
+			throw new MojoFailureException(getActionName() + " failed: " + e.getMessage(), e);
 		}
 		logDiagnostic(null, diagnostic);
 		if(diagnostic.getSeverity() == Diagnostic.ERROR)
-			throw new MojoFailureException(getActionName() + " failed");
+			throw new MojoFailureException(diagnostic.getErrorText());
 	}
 
 	private boolean findModuleFiles(File[] files, List<File> moduleFiles) {
@@ -198,17 +244,53 @@ public abstract class AbstractForgeMojo extends AbstractMojo {
 		return log;
 	}
 
-	protected Metadata getModuleMetadata(File moduleDirectory) throws IOException {
+	protected Metadata getModuleMetadata(File moduleDirectory, Diagnostic diag) throws IOException {
 		StringWriter writer = new StringWriter();
 		try {
+			ForgeService forgeService = ForgeFactory.eINSTANCE.createForgeService();
+			org.cloudsmith.geppetto.forge.Metadata md;
 			Gson gson = JsonUtils.getGSon();
-			gson.toJson(ForgeFactory.eINSTANCE.createForgeService().loadModule(moduleDirectory), writer);
+			try {
+				md = forgeService.loadJSONMetadata(new File(moduleDirectory, "metadata.json"));
+			}
+			catch(FileNotFoundException e) {
+				md = forgeService.loadModule(moduleDirectory);
+			}
+			// TODO: User the v2 Metadata throughout.
+			gson.toJson(md, writer);
 		}
 		finally {
 			StreamUtil.close(writer);
 		}
 		Gson gson = getForge().createGson();
-		return gson.fromJson(writer.toString(), Metadata.class);
+		Metadata md = gson.fromJson(writer.toString(), Metadata.class);
+		if(isNull(md.getAuthor())) {
+			md.setAuthor(null);
+			diag.addChild(new Diagnostic(Diagnostic.ERROR, DiagnosticType.GEPPETTO, "Module Author must not be null"));
+		}
+		if(isNull(md.getVersion())) {
+			md.setVersion(null);
+			diag.addChild(new Diagnostic(Diagnostic.ERROR, DiagnosticType.GEPPETTO, "Module Version must not be null"));
+		}
+		QName qname = md.getName();
+		if(qname != null) {
+			String qual = qname.getQualifier();
+			String name = qname.getName();
+			if(isNull(qual)) {
+				qual = null;
+				diag.addChild(new Diagnostic(
+					Diagnostic.ERROR, DiagnosticType.GEPPETTO, "Module Qualifier must not be null"));
+			}
+			if(isNull(name)) {
+				name = null;
+				diag.addChild(new Diagnostic(Diagnostic.ERROR, DiagnosticType.GEPPETTO, "Module Name must not be null"));
+			}
+			if(qual == null || name == null) {
+				qname = new QName(qual, name);
+				md.setName(qname);
+			}
+		}
+		return md;
 	}
 
 	protected File getModulesRoot() {

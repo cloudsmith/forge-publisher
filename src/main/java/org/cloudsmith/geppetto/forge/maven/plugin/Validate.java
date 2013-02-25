@@ -355,17 +355,18 @@ public class Validate extends AbstractForgeMojo {
 		MetadataRepository metadataRepo = getForge().createMetadataRepository();
 
 		List<File> importedModuleLocations = null;
-		if(checkReferences) {
-			List<Metadata> metadatas = new ArrayList<Metadata>();
-			for(File moduleRoot : moduleLocations) {
-				Metadata metadata = getModuleMetadata(moduleRoot);
-				metadatas.add(metadata);
-			}
+		List<Metadata> metadatas = new ArrayList<Metadata>();
+		for(File moduleRoot : moduleLocations)
+			metadatas.add(getModuleMetadata(moduleRoot, result));
 
+		if(result.getSeverity() == Diagnostic.ERROR)
+			return;
+
+		if(checkReferences) {
 			Set<Dependency> unresolvedCollector = new HashSet<Dependency>();
 			Set<Release> releasesToDownload = resolveDependencies(metadataRepo, metadatas, unresolvedCollector);
 			for(Dependency unresolved : unresolvedCollector)
-				result.addChild(new Diagnostic(Diagnostic.WARNING, String.format(
+				result.addChild(new Diagnostic(Diagnostic.WARNING, DiagnosticType.GEPPETTO, String.format(
 					"Unable to resolve dependency: %s:%s", unresolved.getName(),
 					unresolved.getVersionRequirement().toString())));
 
@@ -376,14 +377,16 @@ public class Validate extends AbstractForgeMojo {
 
 				ReleaseService releaseService = getForge().createReleaseService();
 				for(Release release : releasesToDownload) {
-					result.addChild(new Diagnostic(Diagnostic.INFO, "Installing dependent module " +
-							release.getFullName() + ':' + release.getVersion()));
+					result.addChild(new Diagnostic(
+						Diagnostic.INFO, DiagnosticType.GEPPETTO, "Installing dependent module " +
+								release.getFullName() + ':' + release.getVersion()));
 					importedModuleLocations.add(downloadAndInstall(releaseService, importedModulesDir, release, result));
 				}
 			}
 			else {
 				if(unresolvedCollector.isEmpty())
-					result.addChild(new Diagnostic(Diagnostic.INFO, "No addtional dependencies were detected"));
+					result.addChild(new Diagnostic(
+						Diagnostic.INFO, DiagnosticType.GEPPETTO, "No additional dependencies were detected"));
 			}
 		}
 		if(importedModuleLocations == null)
@@ -460,7 +463,7 @@ public class Validate extends AbstractForgeMojo {
 	protected void invoke(Diagnostic result) throws IOException {
 		List<File> moduleRoots = findModuleRoots();
 		if(moduleRoots.isEmpty()) {
-			result.addChild(new Diagnostic(Diagnostic.ERROR, "No modules found in repository"));
+			result.addChild(new Diagnostic(Diagnostic.ERROR, DiagnosticType.GEPPETTO, "No modules found in repository"));
 			return;
 		}
 

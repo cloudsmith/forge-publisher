@@ -49,9 +49,10 @@ public class Diagnostic extends MessageWithSeverity {
 	 * @param error
 	 * @param string
 	 */
-	public Diagnostic(int severity, String message) {
+	public Diagnostic(int severity, DiagnosticType type, String message) {
 		setSeverity(severity);
 		setMessage(message);
+		setType(type);
 	}
 
 	public void addChild(Diagnostic child) {
@@ -71,6 +72,12 @@ public class Diagnostic extends MessageWithSeverity {
 		return children == null
 				? Collections.<Diagnostic> emptyList()
 				: children;
+	}
+
+	public String getErrorText() {
+		StringBuilder bld = new StringBuilder();
+		toString(ERROR, bld, 0);
+		return bld.toString();
 	}
 
 	public int getHttpCode() {
@@ -194,8 +201,11 @@ public class Diagnostic extends MessageWithSeverity {
 		this.type = type.ordinal();
 	}
 
-	@Override
-	public void toString(StringBuilder bld, int indent) {
+	private void toString(int severity, StringBuilder bld, int indent) {
+		if(getSeverity() < severity)
+			// Severity is transitive, so nothing to add here
+			return;
+
 		for(int idx = 0; idx < indent; ++idx)
 			bld.append(' ');
 
@@ -233,11 +243,16 @@ public class Diagnostic extends MessageWithSeverity {
 			int top = children.size();
 			int idx = 0;
 			for(;;) {
-				children.get(idx).toString(bld, indent);
+				children.get(idx).toString(severity, bld, indent);
 				if(++idx >= top)
 					break;
 				bld.append('\n');
 			}
 		}
+	}
+
+	@Override
+	public void toString(StringBuilder bld, int indent) {
+		toString(INFO, bld, indent);
 	}
 }

@@ -27,7 +27,7 @@
 								<puppetLintOption>NoHardTabsCheck</puppetLintOption>
 								<puppetLintOption>NoTwoSpaceSoftTabsCheck</puppetLintOption>
 							</puppetLintOptions>
-							<missingDefaultInSelector>ERROR</missingDefaultInSelector>
+							<missingDefaultInSelector>IGNORE</missingDefaultInSelector>
 						</configuration>
 					</execution>
 					<execution>
@@ -44,8 +44,8 @@
 				<configuration>
 					<login>bob</login>
 					<password>bobbobbob</password>
-					<serviceURL>http://forgeserver.tada.se/</serviceURL>
-					<modulesRoot>/home/thhal/git/demo</modulesRoot>
+					<serviceURL>${testForgeServiceURL}</serviceURL>
+					<modulesRoot>${testForgeModulesRoot}</modulesRoot>
 				</configuration>
 			</plugin>
 		</plugins>

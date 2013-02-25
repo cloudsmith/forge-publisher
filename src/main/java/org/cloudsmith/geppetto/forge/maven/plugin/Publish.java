@@ -94,9 +94,7 @@ public class Publish extends AbstractForgeMojo {
 
 		List<File> moduleRoots = findModuleRoots();
 		if(moduleRoots.isEmpty()) {
-			Diagnostic diag = new Diagnostic(Diagnostic.ERROR, "No modules found in repository");
-			diag.setType(DiagnosticType.PUBLISHER);
-			result.addChild(diag);
+			result.addChild(new Diagnostic(Diagnostic.ERROR, DiagnosticType.PUBLISHER, "No modules found in repository"));
 			return;
 		}
 
@@ -107,13 +105,12 @@ public class Publish extends AbstractForgeMojo {
 		List<String> alreadyPublishedPaths = new ArrayList<String>();
 		List<Metadata> metadatas = new ArrayList<Metadata>();
 		for(File moduleRoot : moduleRoots) {
-			Metadata metadata = getModuleMetadata(moduleRoot);
+			Metadata metadata = getModuleMetadata(moduleRoot, result);
 			try {
 				if(metadataRepo.resolve(metadata.getName(), metadata.getVersion()) != null) {
-					Diagnostic diag = new Diagnostic(Diagnostic.WARNING, "Module " + metadata.getName() + ':' +
-							metadata.getVersion() + " has already been published");
+					Diagnostic diag = new Diagnostic(Diagnostic.WARNING, DiagnosticType.PUBLISHER, "Module " +
+							metadata.getName() + ':' + metadata.getVersion() + " has already been published");
 					diag.setIssue(ALREADY_PUBLISHED);
-					diag.setType(DiagnosticType.PUBLISHER);
 					result.addChild(diag);
 					alreadyPublishedPaths.add(moduleRoot.getAbsolutePath());
 				}
@@ -134,6 +131,8 @@ public class Publish extends AbstractForgeMojo {
 			}
 			metadatas.add(metadata);
 		}
+		if(result.getSeverity() == Diagnostic.ERROR)
+			return;
 
 		int idx = moduleRoots.size();
 		while(--idx >= 0)
@@ -141,10 +140,9 @@ public class Publish extends AbstractForgeMojo {
 				moduleRoots.remove(idx);
 
 		if(moduleRoots.isEmpty()) {
-			Diagnostic diag = new Diagnostic(
-				Diagnostic.INFO, "All modules have already been published at their current version");
-			diag.setType(DiagnosticType.PUBLISHER);
-			result.addChild(diag);
+			result.addChild(new Diagnostic(
+				Diagnostic.INFO, DiagnosticType.PUBLISHER,
+				"All modules have already been published at their current version"));
 			return;
 		}
 
@@ -152,9 +150,8 @@ public class Publish extends AbstractForgeMojo {
 		String[] namesReceiver = new String[2];
 		File builtModules = new File(getBuildDir(), "builtModules");
 		if(!(builtModules.mkdirs() || builtModules.isDirectory())) {
-			Diagnostic diag = new Diagnostic(Diagnostic.ERROR, "Unable to create directory" + builtModules.getPath());
-			diag.setType(DiagnosticType.PUBLISHER);
-			result.addChild(diag);
+			result.addChild(new Diagnostic(Diagnostic.ERROR, DiagnosticType.PUBLISHER, "Unable to create directory" +
+					builtModules.getPath()));
 			return;
 		}
 
@@ -164,16 +161,12 @@ public class Publish extends AbstractForgeMojo {
 				moduleArchive = buildForge(forgeService, moduleRoot, builtModules, namesReceiver);
 			}
 			catch(IncompleteException e) {
-				Diagnostic diag = new Diagnostic(Diagnostic.ERROR, e.getMessage());
-				diag.setType(DiagnosticType.PUBLISHER);
-				result.addChild(diag);
+				result.addChild(new Diagnostic(Diagnostic.ERROR, DiagnosticType.PUBLISHER, e.getMessage()));
 				continue;
 			}
 			if(dryRun) {
-				Diagnostic diag = new Diagnostic(Diagnostic.INFO, "Module file " + moduleArchive.getName() +
-						" would have been uploaded (but wasn't since this is a dry run)");
-				diag.setType(DiagnosticType.PUBLISHER);
-				result.addChild(diag);
+				result.addChild(new Diagnostic(Diagnostic.INFO, DiagnosticType.PUBLISHER, "Module file " +
+						moduleArchive.getName() + " would have been uploaded (but wasn't since this is a dry run)"));
 			}
 			else {
 				InputStream gzInput = new FileInputStream(moduleArchive);
@@ -181,16 +174,13 @@ public class Publish extends AbstractForgeMojo {
 					releaseService.create(
 						namesReceiver[0], namesReceiver[1], "Published using GitHub trigger", gzInput,
 						moduleArchive.length());
-					Diagnostic diag = new Diagnostic(Diagnostic.INFO, "Module file " + moduleArchive.getName() +
-							" has been uploaded");
-					diag.setType(DiagnosticType.PUBLISHER);
-					result.addChild(diag);
+					result.addChild(new Diagnostic(Diagnostic.INFO, DiagnosticType.PUBLISHER, "Module file " +
+							moduleArchive.getName() + " has been uploaded"));
 				}
 				catch(HttpResponseException e) {
-					Diagnostic diag = new Diagnostic(Diagnostic.ERROR, "Unable to publish module " +
-							moduleArchive.getName() + ":" + e.getMessage());
-					diag.setType(DiagnosticType.PUBLISHER);
-					result.addChild(diag);
+					result.addChild(new Diagnostic(
+						Diagnostic.ERROR, DiagnosticType.PUBLISHER, "Unable to publish module " +
+								moduleArchive.getName() + ":" + e.getMessage()));
 					continue;
 				}
 				finally {
