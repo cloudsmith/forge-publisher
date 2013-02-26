@@ -165,14 +165,16 @@
 							<goal>exec</goal>
 						</goals>
 						<configuration>
-							<executable>${testScriptDir}/testserver-start</executable>
+							<executable>bash</executable>
 							<!-- Assumes puppet-forge-api repo adjacent to the geppetto repo. -->
 							<workingDirectory>${testForgeServerDir}</workingDirectory>
 							<arguments>
-								<argument>${testForgeServerPidFile}</argument>
-								<argument>${testForgeServerLogFile}</argument>
+								<argument>--login</argument>
+								<argument>${testScriptDir}/testserver-start</argument>
 							</arguments>
 							<environmentVariables>
+								<LOG_FILE>${testForgeServerLogFile}</LOG_FILE>
+								<PID_FILE>${testForgeServerPidFile}</PID_FILE>
 								<FORGE_CLIENT_ID>${forgeClientId}</FORGE_CLIENT_ID>
 								<FORGE_CLIENT_SECRET>${forgeClientSecret}</FORGE_CLIENT_SECRET>
 								<FORGE_LOGIN>${testForgeLogin}</FORGE_LOGIN>
@@ -187,12 +189,15 @@
 							<goal>exec</goal>
 						</goals>
 						<configuration>
-							<executable>${testScriptDir}/testserver-stop</executable>
-							<!-- Assumes puppet-forge-api repo adjacent to the geppetto repo. -->
+							<executable>bash</executable>
 							<workingDirectory>${testForgeServerDir}</workingDirectory>
 							<arguments>
-								<argument>${testForgeServerPidFile}</argument>
+								<arguments>--login</arguments>
+								<argument>${testScriptDir}/testserver-stop</argument>
 							</arguments>
+							<environmentVariables>
+								<PID_FILE>${testForgeServerPidFile}</PID_FILE>
+							</environmentVariables>
 						</configuration>
 					</execution>
 				</executions>
