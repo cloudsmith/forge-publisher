@@ -5,14 +5,15 @@
 	<parent>
 		<groupId>org.cloudsmith.geppetto</groupId>
 		<artifactId>parent</artifactId>
-		<version>3.0.2</version>
+		<version>3.0.3-SNAPSHOT</version>
 		<relativePath>../geppetto/pom.xml</relativePath>
 	</parent>
 
 	<artifactId>forge-maven-plugin</artifactId>
+	<version>0.0.2-SNAPSHOT</version>
 	<packaging>maven-plugin</packaging>
 
-	<name>forge.maven.plugin Maven Plugin</name>
+	<name>GitHub Forge Publisher Maven Plugin</name>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -33,6 +34,14 @@
 		<testForgePasswordSecond>newbnewb</testForgePasswordSecond>
 		<testForgeServiceURL>http://localhost:4567/</testForgeServiceURL>
 	</properties>
+
+	<distributionManagement>
+		<site>
+			<id>cloudsmith-jruby-site</id>
+			<name>JRuby Maven site</name>
+			<url>dav:https://am0.cloudsmith.com/nexus/content/sites/forge-publisher-site/</url>
+		</site>
+	</distributionManagement>
 
 	<dependencies>
 		<dependency>
@@ -120,6 +129,13 @@
 				<filtering>true</filtering>
 			</resource>
 		</resources>
+		<extensions>
+			<extension>
+				<groupId>org.apache.maven.wagon</groupId>
+				<artifactId>wagon-webdav-jackrabbit</artifactId>
+				<version>2.2</version>
+			</extension>
+		</extensions>
 		<plugins>
 			<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
